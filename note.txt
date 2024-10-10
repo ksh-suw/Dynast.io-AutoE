@@ -1,0 +1,234 @@
+// ==UserScript==
+// @name         For Note
+// @namespace    http://tampermonkey.net/
+// @version      Demo
+// @description  try to take over the world!
+// @author       You
+// @match        *://dynast.io/*
+// @match        https://nightly.dynast.cloud
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=dynast.io
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // 授權金鑰限制
+    const authKey = "patriek0000";
+    const maxDevices = 2;
+    const deviceStorageKey = 'authKeyDevices';
+
+    // 為設備產生一個簡單的唯一標識符
+    function generateDeviceId() {
+        return `${navigator.userAgent}-${Math.random().toString(36).substring(2)}`;
+    }
+
+    // 取得已使用授權金鑰的裝置列表
+    function getRegisteredDevices() {
+        let devices = localStorage.getItem(deviceStorageKey);
+        return devices ? JSON.parse(devices) : [];
+    }
+
+    // 保存已使用身份驗證金鑰的裝置的更新列表
+    function saveRegisteredDevices(devices) {
+        localStorage.setItem(deviceStorageKey, JSON.stringify(devices));
+    }
+
+    // 檢查設備是否已註冊
+    function isDeviceRegistered(deviceId) {
+        const devices = getRegisteredDevices();
+        return devices.includes(deviceId);
+    }
+
+    // 將新設備新增至已註冊設備清單中
+    function registerDevice(deviceId) {
+        const devices = getRegisteredDevices();
+        devices.push(deviceId);
+        saveRegisteredDevices(devices);
+    }
+
+    // 檢查註冊設備數量是否超過限制
+    function checkDeviceLimit() {
+        const devices = getRegisteredDevices();
+        return devices.length >= maxDevices;
+    }
+
+    // 詢問授權密鑰
+    function promptForAuthKey() {
+        const enteredKey = prompt("Please enter the auth key:");
+        return enteredKey === authKey;
+    }
+
+    // 驗證金鑰驗證和設備檢查
+    function validateAuth() {
+        // 產生或檢索目前設備 ID
+        let deviceId = localStorage.getItem('deviceId');
+        if (!deviceId) {
+            deviceId = generateDeviceId();
+            localStorage.setItem('deviceId', deviceId);
+        }
+
+        // 檢查設備是否已註冊
+        if (isDeviceRegistered(deviceId)) {
+            console.log("Device is already authorized. Running the script...");
+            return true;  // 驗證成功
+        } else {
+            // 檢查裝置限制並提示輸入授權金鑰
+            if (checkDeviceLimit()) {
+                alert("Auth key limit reached. The script will not run on this device.");
+                return false;  // 授權失敗
+            } else {
+                if (promptForAuthKey()) {
+                    console.log("Auth key validated. Registering the device and running the script...");
+                    registerDevice(deviceId);
+                    return true;  // 授權成功
+                } else {
+                    alert("Invalid auth key. The script will not run.");
+                    return false;  // 授權失敗
+                }
+            }
+        }
+    }
+
+    // 僅當身份驗證成功時才運行腳本
+    if (!validateAuth()) {
+        return;
+    }
+    // TimeMachine：當玩家在撿東西按下熱時把遊戲時間改成快150倍
+    let speed = 1;
+
+    function setTimeSpeed(multiplier) {
+        speed = multiplier;
+    }
+
+    //用TimeMachine 腳本的效能 API 覆蓋
+    let lastPNow = performance.now();
+    let pNowOffset = 0;
+
+    window.performance.now = new Proxy(window.performance.now, {
+        apply: function(target, thisArg, argList) {
+            const time = Reflect.apply(target, thisArg, argList);
+            pNowOffset += (time - lastPNow) * (speed - 1);
+            lastPNow = time;
+            return time + pNowOffset;
+        }
+    });
+
+    // 日期 API 覆蓋
+    let lastD = Date.now();
+    let dOffset = 0;
+
+    window.Date.now = new Proxy(window.Date.now, {
+        apply: function(target, thisArg, argList) {
+            const time = Reflect.apply(target, thisArg, argList);
+            dOffset += (time - lastD) * (speed - 1);
+            lastD = time;
+            return Math.floor(time + dOffset);
+        }
+    });
+
+    // 動畫幀覆蓋（requestAnimationFrame）
+    let lastRAF = performance.now();
+    let rAFOffset = 0;
+
+    window.requestAnimationFrame = new Proxy(window.requestAnimationFrame, {
+        apply: function(target, thisArg, argList) {
+            if (typeof argList[0] === "function") {
+                argList[0] = new Proxy(argList[0], {
+                    apply: function(target2, thisArg2, argList2) {
+                        const time = argList2[0];
+                        rAFOffset += (time - lastRAF) * (speed - 1);
+                        lastRAF = time;
+                        argList2[0] = time + rAFOffset;
+                        return Reflect.apply(target2, thisArg2, argList2);
+                    }
+                });
+            }
+            return Reflect.apply(target, thisArg, argList);
+        }
+    });
+
+    // Dynast.io AutoEEE
+    window.autoEKey = "q";  // 可根據需要自訂自動E鍵
+    window.useRightClick = true;  // 啟用右鍵熱鍵
+    window.ePerSecond = 10 //每秒十次點擊"E"
+
+    let pickingUpItem = false;
+    let ePressInterval;
+    let ePressCount = 0;  // 計算"E"被按下的次數
+
+    // 觸發AutoEEE的功能
+    function startAutoE() {
+        if (!ePressInterval) {
+            ePressInterval = setInterval(() => {
+                const KeyISdown = new KeyboardEvent('keydown', { key: 'e', keyCode: 69, code: 'KeyE' });
+                const KeyISup = new KeyboardEvent('keyup', { key: 'e', keyCode: 69, code: 'KeyE' });
+                window.dispatchEvent(KeyISdown);
+                window.dispatchEvent(KeyISup);
+                ePressCount++;  // 每次觸發"E"時增加"E"按下數
+            }, 1);  // 每1ms重複一次（每次等於10次）
+        }
+    }
+
+    // 停止AutoEEE的功能
+    function stopAutoE() {
+        clearInterval(ePressInterval);
+        ePressInterval = null;
+    }
+
+    // 建立自訂義的AutoE狀態面板
+    let espContainer = document.createElement('div');
+    espContainer.id = 'espContainer';
+    espContainer.style.position = 'absolute';
+    espContainer.style.top = '20px';
+    espContainer.style.left = '20px';
+    espContainer.style.zIndex = '9999';  // 保持在最上面
+    document.body.appendChild(espContainer);
+
+    const statusDiv = document.createElement('div');
+    statusDiv.textContent = "AutoE:OFF[Speedx1]";  // 預設為OFF(沒觸發時為OFF)
+    statusDiv.style.position = 'absolute';
+    statusDiv.style.color = 'red';
+    statusDiv.style.fontSize = '14px';
+    statusDiv.style.left = '190px';  // 靜態位置：Y軸
+    statusDiv.style.top = '45px';    // 靜態位置：X軸
+    espContainer.appendChild(statusDiv);
+
+    // 建立自訂義AutoE計數器面板顯示 “AutoE[??/s]”
+    const eCounterDiv = document.createElement('div');
+    eCounterDiv.textContent = "AutoE[0/s]";
+    eCounterDiv.style.position = 'absolute';
+    eCounterDiv.style.color = 'red';
+    eCounterDiv.style.fontSize = '14px';
+    eCounterDiv.style.left = '190px';  // 靜態位置：Y軸
+    eCounterDiv.style.top = '60px';    // 靜態位置：X軸
+    espContainer.appendChild(eCounterDiv);
+
+    // 更新按下"E"的計數（每1秒更新一次）
+    setInterval(() => {
+        eCounterDiv.textContent = `AutoE[${ePressCount}/s]`;  // 更新計數器顯示
+        ePressCount = 0;  // 每秒重置為0
+    }, 1000); //更新延遲
+
+    // 右鍵熱鍵觸發的監聽器
+    document.addEventListener("mousedown", function(event) {
+        if (event.button === 2) {  // 右鍵(通稱Button 2)
+            pickingUpItem = true;
+            setTimeSpeed(150);  // 當觸發時遊戲時間更改為150倍
+            startAutoE();  // 開始連點AutoE
+            statusDiv.style.color = 'green'; //觸發顏色：綠色
+            statusDiv.textContent = "AutoE:ON[Speedx150]";  // 顯示狀態為"AutoE:ON[Speedx150]"
+        }
+    });
+
+    document.addEventListener("mouseup", function(event) {
+        if (event.button === 2) {  // 右鍵(通稱Button 2)
+            pickingUpItem = false;
+            setTimeSpeed(1);  // 當鬆開右鍵時把遊戲時間調回去正常(默認為1)
+            stopAutoE();  // 停止連點AutoE
+            statusDiv.style.color = 'red'; //未觸發顏色：紅色
+            statusDiv.textContent = "AutoE:OFF[Speedx1]";  // 顯示狀態為AutoE:OFF[Speedx1]"
+        }
+    });
+
+})();
